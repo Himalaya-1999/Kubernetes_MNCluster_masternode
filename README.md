@@ -1,2 +1,2 @@
-# Kubernetes_Master-setup_uing-_ansible
-Kubernetes_Master setup_uing _ansible
+# Kubernetes_Master-setup_using_ansible
+Kubernetes_Master setup_using _ansible
