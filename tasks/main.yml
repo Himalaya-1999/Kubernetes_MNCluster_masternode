@@ -1,0 +1,71 @@
+- hosts: master
+  name: "Setting up Multi Node Cluster upon AWS Cloud"
+  vars_files:
+          - pod_ip.yml
+  tasks:
+    - name: "Installing Docker as a underlying Container Engine & required packages"
+      package: 
+        name: 
+         - "docker"
+         - "iproute-tc"
+        state: present
+    - name: "Starting docker services"
+      service:
+        name: docker
+        state: started
+        enabled: yes
+    - name: "Setting up Kubeadm yum repository"
+      yum_repository:
+        name: Kubernetes
+        description: kubernetes repo
+        baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-\$basearch
+        enabled: yes
+        gpgcheck: yes
+        repo_gpgcheck: yes
+        gpgkey: https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+    
+    - name: "Installing Kubeadm, Kubelet, and Kubectl packages"
+      yum:
+        name: [ 'kubectl', 'kubeadm', 'kubelet' ]
+        state: present
+
+    - name: "pulling required container images for cluster"
+      command: kubeadm config images pull
+
+    - name: "updating systemd docker driver from cgroups"
+      copy:
+        dest: /etc/docker/daemon.json
+        src: daemon.json
+
+    - name: restarting docker services
+      service:
+        name: docker
+        state: restarted
+    - name: "Starting Kubelet Service"
+      service:
+        name: "kubelet"
+        state: started
+        enabled: yes
+    - name: "Initializing the Kubernetes cluser on Master Node"
+      command: "kubeadm init --pod-network-cidr={{ pod_cidr_network }} --ignore-preflight-errors=NumCPU --ignore-preflight-errors=Mem"
+      ignore_errors: True
+   
+    - name: "Configuration Files Setup"
+      file:
+        path: "$HOME/.kube"
+        state: directory                         
+    - name: "Copying Configuration File"
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: $HOME/.kube/config
+        remote_src: yes
+    - name: "Downloading CNI Plugin"
+      command: "kubectl apply  -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml"
+      ignore_errors: True
+
+    - name: "THE JOIN TOKEN"
+      command: "kubeadm token create --print-join-command"
+      register: x
+      ignore_errors: True
+    - name: "Storing Token"
+      local_action: copy content={{ x.stdout }} dest=/tmp/token
